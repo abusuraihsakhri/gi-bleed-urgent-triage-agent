@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gi-bleed-urgent-triage-engine"
+version = "2.0.0"
+description = "GIBleed Sentinel: Rockall, Blatchford & Endoscopic Hemostasis Audit Engine"
+readme = "README.md"
+authors = [{ name = "Dr. Abu Suraih Sakhri", email = "abusuraih@example.com" }]
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+gi-bleed-urgent-triage-engine = "gi_bleed_urgent_triage_agent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/abusuraihsakhri/gi-bleed-urgent-triage-engine"
+Repository = "https://github.com/abusuraihsakhri/gi-bleed-urgent-triage-engine.git"
