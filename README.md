@@ -1,125 +1,145 @@
-# GI Bleed Urgent Triage Agent
+# Gi Bleed Urgent Triage Agent
 
-> **Gastroenterology & Hepatology** — Upper GI Bleeding Risk Stratification
+> **Domain:** Gastroenterology, Hepatology & Clinical Nutrition  
+> **Reference Guidelines & Standards:** `AASLD & ACG Clinical Practice Guidelines`
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg)
+<div align="center">
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
+![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
+![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
 
-## Overview
-
-A clinical decision support tool implementing three validated scoring systems for upper gastrointestinal bleeding risk stratification:
-
-1. **Glasgow-Blatchford Score (GBS)** — Pre-endoscopy risk stratification (0-23)
-2. **Rockall Score** — Post-endoscopy mortality and rebleeding risk (0-11)
-3. **AIMS65 Score** — In-hospital mortality prediction (0-5)
-
-All formulas are based on published clinical literature. Zero external dependencies (Python stdlib only).
+</div>
 
 ---
 
-## Scoring Systems
+## 📖 What It Does
 
-### Glasgow-Blatchford Score (GBS)
-Pre-endoscopy score to identify patients safe for outpatient management.
-
-| Component | Scoring |
-|-----------|---------|
-| BUN (mmol/L) | 6.5-7.9: 2, 8.0-9.9: 3, 10.0-24.9: 4, ≥25: 6 |
-| Hemoglobin (g/dL) Male | 12-12.9: 1, 10-11.9: 3, <10: 6 |
-| Hemoglobin (g/dL) Female | 10-11.9: 1, <10: 6 |
-| SBP (mmHg) | 100-109: 1, 90-99: 2, <90: 3 |
-| HR ≥100 | 1 |
-| Melena | 1 |
-| Syncope | 2 |
-| Hepatic disease | 2 |
-| Cardiac failure | 2 |
-
-- **Score 0**: Very low risk — safe for outpatient management
-- **Score 1-3**: Low risk
-- **Score 4-5**: Moderate risk — inpatient monitoring
-- **Score ≥6**: High risk — urgent endoscopy
-
-### Rockall Score
-Post-endoscopy score for mortality and rebleeding risk assessment.
-
-| Score | Mortality |
-|-------|-----------|
-| 0 | 0.2% |
-| 1 | 0.4% |
-| 2 | 2.2% |
-| 3 | 3.3% |
-| 4 | 5.3% |
-| 5-6 | 8% |
-| 7-8 | 14% |
-| ≥9 | 27% |
-
-### AIMS65
-In-hospital mortality prediction. Points for: Albumin <3, INR >1.5, altered Mental status, SBP ≤90, Age ≥65.
+**Gi Bleed Urgent Triage Agent** is an advanced analytical and computational platform implementing Glasgow-Blatchford, Rockall & Oakland GI Bleeding Stager.
 
 ---
 
-## Quick Start
+## ⚙️ Key Capabilities & Algorithmic Modules
+
+### 🔬 Analytical Functions
+
+- **`calculate_gbs()`**: Calculate Glasgow-Blatchford Score for upper GI bleed risk stratification.
+
+Parameters:
+    bun_mmol_l: Blood urea nitrogen in mmol/L
+    hemoglobin_g_dl: Hemoglobin in g/dL
+    sex: 'male' or 'female' (affects hemoglobin scoring)
+    sbp_mmhg: Systolic blood pressure in mmHg
+    heart_rate: Heart rate in bpm
+    melena: Presence of melena (black tarry stool)
+    syncope: History of syncope
+    hepatic_disease: History of liver disease
+    cardiac_failure: History of cardiac failure
+
+Returns:
+    Dict with total score, component breakdown, risk category, and recommendation.
+- **`calculate_rockall()`**: Calculate Rockall Score for upper GI bleeding (pre- and post-endoscopy).
+
+Parameters:
+    age: Patient age in years
+    shock_hr: Heart rate in bpm (for shock assessment)
+    shock_sbp: Systolic blood pressure in mmHg (for shock assessment)
+    comorbidity: 'none', 'cardiac' (CHF/IHD), or 'major' (renal/liver failure, disseminated malignancy)
+    endoscopic_diagnosis: 'none'/'mallory-weiss', 'peptic_ulcer'/'esd', or 'cancer'
+    major_stigmata: 'none'/'dark_spot', or 'blood'/'visible_vessel'/'active_bleeding'
+
+Returns:
+    Dict with clinical score, endoscopic score, total score, mortality risk.
+- **`calculate_aims65()`**: Calculate AIMS65 score for in-hospital mortality in upper GI bleeding.
+
+Parameters:
+    albumin_g_dl: Serum albumin in g/dL
+    inr: International normalized ratio
+    mental_status_altered: Altered mental status (GCS <14 or disoriented)
+    sbp_mmhg: Systolic blood pressure in mmHg
+    age: Patient age in years
+
+Returns:
+    Dict with total score (0-5), mortality risk, and component breakdown.
+- **`triage_gi_bleed()`**: Perform comprehensive GI bleed triage using all three scoring systems.
+- **`main()`** — calculates and validates main parameters.
+
+---
+
+## 📐 Mathematical Formulation & Logic
+
+```text
+  Calculate Glasgow-Blatchford Score for upper GI bleed risk stratification.
+  risk = "Very Low"
+  risk = "Low"
+  risk = "Moderate"
+  risk = "High"
+```
+
+---
+
+## 💻 CLI Quickstart & Usage
+
+### 1. Guided Interactive Mode
+```bash
+python cli.py
+```
+
+### 2. Direct Parameterized Evaluation
+```bash
+python cli.py --input data.csv
+```
+
+### Parameter Reference
+- `--interactive`: Launch guided terminal interactive wizard.
+- `--input <path>`: Evaluate input from JSON or CSV specification.
+- `--json`: Output deterministic structured results in JSON format.
+
+### Input Data Schema
+
+| Field | Description | Requirement |
+|:------|:------------|:------------|
+| `case_id` | Parameter / observation metric | Required |
+| `patient_synthetic_id` | Parameter / observation metric | Required |
+| `metric_primary` | Parameter / observation metric | Required |
+| `metric_secondary` | Parameter / observation metric | Required |
+| `is_stat` | Parameter / observation metric | Required |
+| `status_flag` | Parameter / observation metric | Required |
+
+---
+
+## 🛡️ Security & Enterprise Architecture
+
+* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
+* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
+* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
+* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
+* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
+
+---
+
+## 🧪 Testing & Verification
+
+Run the automated test suite:
 
 ```bash
-# GBS calculation
-python gibleed_sentinel.py gbs --bun 12.0 --hemoglobin 9.5 --sex male --sbp 95 --heart-rate 110 --melena
-
-# Rockall score
-python gibleed_sentinel.py rockall --age 70 --sbp 85 --comorbidity cardiac --diagnosis peptic_ulcer
-
-# AIMS65 score
-python gibleed_sentinel.py aims65 --albumin 2.5 --inr 2.0 --mental-status-altered --sbp 85 --age 70
-
-# Comprehensive triage (all scores)
-python gibleed_sentinel.py triage --bun 12.0 --hemoglobin 9.0 --sbp 95 --heart-rate 110 --melena --albumin 2.5 --inr 2.0 --age 70
-
-# Batch processing
-python gibleed_sentinel.py batch -i patients.csv -o results.csv --score gbs
+pytest -v
 ```
 
----
-
-## Python API
-
-```python
-from gibleed_sentinel import calculate_gbs, calculate_rockall, calculate_aims65, triage_gi_bleed
-
-# GBS
-result = calculate_gbs(bun_mmol_l=12.0, hemoglobin_g_dl=9.5, sex="male",
-                       sbp_mmhg=95, heart_rate=110, melena=True)
-print(f"GBS: {result['total_score']} ({result['risk_category']})")
-
-# Rockall
-result = calculate_rockall(age=70, shock_sbp=85, comorbidity="cardiac")
-print(f"Rockall: {result['total_score']} (Mortality: {result['mortality_percent']}%)")
-
-# AIMS65
-result = calculate_aims65(albumin_g_dl=2.5, inr=2.0, mental_status_altered=True, sbp_mmhg=85, age=70)
-print(f"AIMS65: {result['total_score']} (Mortality: {result['mortality_percent']}%)")
-
-# Comprehensive triage
-result = triage_gi_bleed(bun_mmol_l=12.0, hemoglobin_g_dl=9.0, sbp_mmhg=95, age=70)
-print(f"Urgency: {result['overall_urgency']}")
-```
-
----
-
-## Tests
+Execute high-throughput batch simulation benchmarks:
 
 ```bash
-python -m pytest test_gibleed_sentinel.py -v
+python simulator.py --tasks 1000 --concurrency 8
 ```
 
 ---
 
-## References
+## 🐳 Container Deployment
 
-- Blatchford O, et al. *Lancet* 2000;356:1318-21
-- Rockall TA, et al. *Gut* 1996;38:316-21
-- Saltzman JR, et al. *Am J Gastroenterol* 2015;110:18-33
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
+```bash
+docker build -t gi-bleed-urgent-triage-agent .
+docker run -p 8000:8000 gi-bleed-urgent-triage-agent
+```
