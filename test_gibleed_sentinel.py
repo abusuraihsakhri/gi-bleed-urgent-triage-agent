@@ -15,6 +15,8 @@ from gibleed_sentinel import (
     calculate_aims65,
     triage_gi_bleed,
     main,
+    _validate_range,
+    _validate_inputs,
 )
 
 
@@ -361,6 +363,105 @@ class TestCLI:
         """CLI triage subcommand works."""
         ret = main(["triage", "--bun", "12.0", "--hemoglobin", "9.0", "--sbp", "95"])
         assert ret == 0
+
+
+# =============================================================================
+# Input Validation Tests
+# =============================================================================
+
+class TestInputValidation:
+    """Tests for input range validation."""
+
+    def test_validate_range_valid(self):
+        """Valid values pass validation."""
+        _validate_range("bun_mmol_l", 10.0, 0.0, 100.0)
+        _validate_range("hemoglobin_g_dl", 12.0, 0.0, 25.0)
+
+    def test_validate_range_none(self):
+        """None values are skipped."""
+        _validate_range("bun_mmol_l", None, 0.0, 100.0)
+
+    def test_validate_range_below_min(self):
+        """Values below minimum raise ValueError."""
+        with pytest.raises(ValueError, match="must be between"):
+            _validate_range("bun_mmol_l", -5.0, 0.0, 100.0)
+
+    def test_validate_range_above_max(self):
+        """Values above maximum raise ValueError."""
+        with pytest.raises(ValueError, match="must be between"):
+            _validate_range("bun_mmol_l", 150.0, 0.0, 100.0)
+
+    def test_validate_range_nan(self):
+        """NaN values raise ValueError."""
+        with pytest.raises(ValueError, match="finite number"):
+            _validate_range("bun_mmol_l", float("nan"), 0.0, 100.0)
+
+    def test_validate_range_inf(self):
+        """Infinite values raise ValueError."""
+        with pytest.raises(ValueError, match="finite number"):
+            _validate_range("bun_mmol_l", float("inf"), 0.0, 100.0)
+
+    def test_validate_range_wrong_type(self):
+        """Non-numeric values raise TypeError."""
+        with pytest.raises(TypeError, match="must be a number"):
+            _validate_range("bun_mmol_l", "ten", 0.0, 100.0)
+
+
+class TestGBSInputValidation:
+    """Tests for GBS input validation."""
+
+    def test_gbs_negative_bun_raises(self):
+        """Negative BUN raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_gbs(bun_mmol_l=-5.0)
+
+    def test_gbs_excessive_hemoglobin_raises(self):
+        """Excessive hemoglobin raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_gbs(hemoglobin_g_dl=50.0)
+
+    def test_gbs_valid_inputs(self):
+        """Valid inputs work correctly."""
+        result = calculate_gbs(bun_mmol_l=10.0, hemoglobin_g_dl=12.0, sbp_mmhg=120, heart_rate=80)
+        assert result["total_score"] >= 0
+
+
+class TestRockallInputValidation:
+    """Tests for Rockall input validation."""
+
+    def test_rockall_negative_age_raises(self):
+        """Negative age raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_rockall(age=-10)
+
+    def test_rockall_excessive_sbp_raises(self):
+        """Excessive SBP raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_rockall(shock_sbp=500)
+
+    def test_rockall_valid_inputs(self):
+        """Valid inputs work correctly."""
+        result = calculate_rockall(age=50, shock_hr=80, shock_sbp=120)
+        assert result["total_score"] >= 0
+
+
+class TestAIMS65InputValidation:
+    """Tests for AIMS65 input validation."""
+
+    def test_aims65_negative_albumin_raises(self):
+        """Negative albumin raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_aims65(albumin_g_dl=-1.0)
+
+    def test_aims65_excessive_inr_raises(self):
+        """Excessive INR raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_aims65(inr=50.0)
+
+    def test_aims65_valid_inputs(self):
+        """Valid inputs work correctly."""
+        result = calculate_aims65(albumin_g_dl=3.5, inr=1.2, age=50)
+        assert result["total_score"] >= 0
 
 
 if __name__ == "__main__":

@@ -59,7 +59,7 @@ def test_supervisor_consensus_and_audit():
     # Verify cryptographic audit trail
     assert AuditLogger.verify_integrity() is True
 
-    # CLI tests
-    assert main(["audit", "--task-id", "CLI-TEST-01"]) == 0
-    assert main(["chat", "Explain", "specifications"]) == 0
-    assert main(["verify-audit"]) == 0
+    # CLI tests - using valid subcommands from gibleed_sentinel.main
+    assert main(["gbs", "--bun", "10.0", "--sbp", "95", "--melena"]) == 0
+    assert main(["rockall", "--age", "70", "--sbp", "85", "--comorbidity", "cardiac"]) == 0
+    assert main(["aims65", "--albumin", "2.5", "--inr", "2.0", "--age", "70"]) == 0

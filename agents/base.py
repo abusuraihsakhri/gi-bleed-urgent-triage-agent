@@ -8,6 +8,7 @@ import json
 import time
 import hmac
 import hashlib
+import secrets
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
@@ -57,7 +58,15 @@ class PHIGuard:
 class AuditTrail:
     """Cryptographic Tamper-Evident HMAC-SHA256 Audit Trail."""
     def __init__(self, secret_key: Optional[str] = None):
-        self.secret_key = (secret_key or os.getenv("AUDIT_SECRET_KEY", "gi-bleed-urgent-triage-agent-master-audit-key-2026")).encode("utf-8")
+        key = secret_key or os.getenv("AUDIT_SECRET_KEY")
+        if not key:
+            # Fallback: generate a random per-session key.
+            # NOTE: For production, always set AUDIT_SECRET_KEY env var to ensure
+            # audit chain continuity across restarts.
+            key = secrets.token_hex(32)
+        if len(key) < 16:
+            raise ValueError("AUDIT_SECRET_KEY must be at least 16 characters long")
+        self.secret_key = key.encode("utf-8")
         self.logs: List[Dict[str, Any]] = []
 
     def log(self, actor: str, actor_tier: str, event_type: str, details: Dict[str, Any]) -> Dict[str, Any]:

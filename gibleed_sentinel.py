@@ -26,6 +26,42 @@ from typing import Dict, Any, List, Optional
 
 
 # =============================================================================
+# Input Validation
+# =============================================================================
+
+# Clinically plausible ranges for input parameters
+VALID_RANGES = {
+    "bun_mmol_l": (0.0, 100.0),
+    "hemoglobin_g_dl": (0.0, 25.0),
+    "sbp_mmhg": (0.0, 300.0),
+    "heart_rate": (0.0, 300.0),
+    "albumin_g_dl": (0.0, 10.0),
+    "inr": (0.0, 20.0),
+    "age": (0, 150),
+}
+
+
+def _validate_range(name: str, value: Optional[float], min_val: float, max_val: float) -> None:
+    """Validate that a numeric value falls within an acceptable clinical range."""
+    if value is None:
+        return
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a number, got {type(value).__name__}")
+    if math.isnan(value) or math.isinf(value):
+        raise ValueError(f"{name} must be a finite number, got {value}")
+    if value < min_val or value > max_val:
+        raise ValueError(f"{name} must be between {min_val} and {max_val}, got {value}")
+
+
+def _validate_inputs(**kwargs) -> None:
+    """Validate multiple input parameters against their defined ranges."""
+    for name, value in kwargs.items():
+        if name in VALID_RANGES:
+            min_val, max_val = VALID_RANGES[name]
+            _validate_range(name, value, min_val, max_val)
+
+
+# =============================================================================
 # Glasgow-Blatchford Score (GBS) - Pre-endoscopy
 # =============================================================================
 
@@ -56,7 +92,16 @@ def calculate_gbs(
 
     Returns:
         Dict with total score, component breakdown, risk category, and recommendation.
+
+    Raises:
+        ValueError: If any input is outside clinically plausible range.
+        TypeError: If any input is not a number.
     """
+    _validate_inputs(
+        bun_mmol_l=bun_mmol_l, hemoglobin_g_dl=hemoglobin_g_dl,
+        sbp_mmhg=sbp_mmhg, heart_rate=heart_rate,
+    )
+
     components = {}
     total = 0
 
@@ -178,7 +223,15 @@ def calculate_rockall(
 
     Returns:
         Dict with clinical score, endoscopic score, total score, mortality risk.
+
+    Raises:
+        ValueError: If any input is outside clinically plausible range.
+        TypeError: If any input is not a number.
     """
+    _validate_inputs(
+        age=age, heart_rate=shock_hr, sbp_mmhg=shock_sbp,
+    )
+
     clinical_score = 0
     clinical_components = {}
 
@@ -301,7 +354,16 @@ def calculate_aims65(
 
     Returns:
         Dict with total score (0-5), mortality risk, and component breakdown.
+
+    Raises:
+        ValueError: If any input is outside clinically plausible range.
+        TypeError: If any input is not a number.
     """
+    _validate_inputs(
+        albumin_g_dl=albumin_g_dl, inr=inr,
+        sbp_mmhg=sbp_mmhg, age=age,
+    )
+
     components = {}
     total = 0
 
