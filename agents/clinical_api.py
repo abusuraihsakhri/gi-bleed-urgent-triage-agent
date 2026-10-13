@@ -67,7 +67,7 @@ def gbs(req: GBSRequest):
 
 @app.post("/api/aims65")
 def aims65(req: AIMS65Request):
-    return calculate_aims65(**req.model_dump())
+    return calculate_aims65(**req.model_dump(), mental_status_confirmed=True)
 
 
 @app.post("/api/rockall")
