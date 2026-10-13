@@ -210,7 +210,8 @@ def calculate_gbs(
         "recommendation": recommendation,
         "score_complete": not missing,
         "missing_fields": missing,
-        "safe_for_outpatient": not missing and total <= 1,
+        "safe_for_outpatient": False,  # A score alone cannot authorize discharge.
+        "meets_very_low_risk_criterion": not missing and total <= 1,
         "clinical_caveat": "Screening score only; does not replace clinician judgment.",
     }
 
