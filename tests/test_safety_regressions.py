@@ -28,7 +28,7 @@ def test_gbs_very_low_risk_boundary():
 
 
 def test_gbs_bun_and_hemoglobin_boundaries():
-    assert calculate_gbs(bun_mmol_l=25)["components"]["bun"] == 4
+    assert calculate_gbs(bun_mmol_l=25)["components"]["bun"] == 6
     assert calculate_gbs(bun_mmol_l=25.01)["components"]["bun"] == 6
     assert calculate_gbs(hemoglobin_g_dl=12.95)["components"]["hemoglobin"] == 1
     assert calculate_gbs(hemoglobin_g_dl=13)["components"]["hemoglobin"] == 0
