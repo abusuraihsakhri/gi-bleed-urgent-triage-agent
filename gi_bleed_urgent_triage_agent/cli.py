@@ -12,6 +12,7 @@ coordinator = GIBleedCoordinator()
 
 
 def main(argv=None):
+    print("NOTICE: This legacy generic-metric audit is not validated for GI bleeding triage. Use 'gi-bleed-urgent-triage-engine' for score calculators.", file=sys.stderr)
     parser = argparse.ArgumentParser(prog="gi-bleed-urgent-triage-agent", description="GIBleed Sentinel: Rockall, Blatchford & Endoscopic Hemostasis Audit Agent")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
