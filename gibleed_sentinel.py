@@ -11,7 +11,7 @@ All formulas are based on published clinical literature. Zero external dependenc
 References:
   - Blatchford O, et al. Lancet 2000;356:1318-21
   - Rockall TA, et al. Gut 1996;38:316-21
-  - Saltzman JR, et al. Am J Gastroenterol 2015;110:18-33 (AIMS65)
+  - Saltzman JR, et al. Gastrointest Endosc 2011;74:1215-1224 (AIMS65)
 
 Author: Dr. Abu Suraih Sakhri
 License: MIT
@@ -45,7 +45,7 @@ def _validate_range(name: str, value: Optional[float], min_val: float, max_val: 
     """Validate that a numeric value falls within an acceptable clinical range."""
     if value is None:
         return
-    if not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a number, got {type(value).__name__}")
     if math.isnan(value) or math.isinf(value):
         raise ValueError(f"{name} must be a finite number, got {value}")
@@ -75,12 +75,13 @@ def calculate_gbs(
     syncope: bool = False,
     hepatic_disease: bool = False,
     cardiac_failure: bool = False,
+    history_confirmed: bool = False,
 ) -> Dict[str, Any]:
     """
     Calculate Glasgow-Blatchford Score for upper GI bleed risk stratification.
 
     Parameters:
-        bun_mmol_l: Blood urea nitrogen in mmol/L
+        bun_mmol_l: Blood urea in mmol/L (legacy parameter name; NOT BUN units)
         hemoglobin_g_dl: Hemoglobin in g/dL
         sex: 'male' or 'female' (affects hemoglobin scoring)
         sbp_mmhg: Systolic blood pressure in mmHg
@@ -102,6 +103,12 @@ def calculate_gbs(
         sbp_mmhg=sbp_mmhg, heart_rate=heart_rate,
     )
 
+    if not isinstance(sex, str) or sex.lower() not in ("male", "female"):
+        raise ValueError("sex must be 'male' or 'female'")
+    missing = [key for key, val in (
+        ("bun_mmol_l", bun_mmol_l), ("hemoglobin_g_dl", hemoglobin_g_dl),
+        ("sbp_mmhg", sbp_mmhg), ("heart_rate", heart_rate)
+    ) if val is None]
     components = {}
     total = 0
 
@@ -127,7 +134,7 @@ def calculate_gbs(
                 components["hemoglobin"] = 6
             elif hemoglobin_g_dl < 12.0:
                 components["hemoglobin"] = 3
-            elif hemoglobin_g_dl <= 12.9:
+            elif hemoglobin_g_dl < 13.0:
                 components["hemoglobin"] = 1
             else:
                 components["hemoglobin"] = 0
@@ -170,22 +177,33 @@ def calculate_gbs(
     components["cardiac_failure"] = 2 if cardiac_failure else 0
     total += components["cardiac_failure"]
 
-    # Risk stratification
-    if total == 0:
+    if not isinstance(history_confirmed, bool):
+        raise TypeError("history_confirmed must be boolean")
+    if not history_confirmed:
+        missing.append("clinical_features_confirmation")
+    for name, value in (("melena", melena), ("syncope", syncope),
+                        ("hepatic_disease", hepatic_disease), ("cardiac_failure", cardiac_failure)):
+        if not isinstance(value, bool):
+            raise TypeError(f"{name} must be boolean")
+    # Higher score categories are descriptive, not validated disposition thresholds.
+    if missing:
+        risk = "Indeterminate"
+        recommendation = "Partial GBS (minimum observed score shown); complete all inputs before risk interpretation."
+    elif total <= 1:
         risk = "Very Low"
-        recommendation = "Safe for outpatient management. Consider outpatient endoscopy if indicated."
+        recommendation = "GBS 0-1 may support outpatient follow-up after clinician assessment of stability and other risks."
     elif total <= 3:
         risk = "Low"
-        recommendation = "Consider outpatient management with close follow-up."
+        recommendation = "Clinical assessment required; GBS above 1 does not meet the ACG very-low-risk discharge criterion."
     elif total <= 5:
         risk = "Moderate"
-        recommendation = "Inpatient monitoring recommended. Urgent endoscopy within 24 hours."
+        recommendation = "Assess clinically; GBS category alone does not determine treatment or endoscopy timing."
     elif total <= 8:
         risk = "High"
-        recommendation = "Requires inpatient care. Urgent endoscopy. Consider ICU admission."
+        recommendation = "Prompt senior clinical assessment; stabilize and investigate as indicated."
     else:
         risk = "Very High"
-        recommendation = "ICU admission. Immediate resuscitation and urgent endoscopy."
+        recommendation = "Urgent clinical evaluation and resuscitation if indicated; score alone does not mandate ICU care."
 
     return {
         "tool": "glasgow-blatchford-score",
@@ -194,7 +212,11 @@ def calculate_gbs(
         "components": components,
         "risk_category": risk,
         "recommendation": recommendation,
-        "safe_for_outpatient": total == 0,
+        "score_complete": not missing,
+        "missing_fields": missing,
+        "safe_for_outpatient": False,  # A score alone cannot authorize discharge.
+        "meets_very_low_risk_criterion": not missing and total <= 1,
+        "clinical_caveat": "Screening score only; does not replace clinician judgment.",
     }
 
 
@@ -206,9 +228,9 @@ def calculate_rockall(
     age: Optional[int] = None,
     shock_hr: Optional[float] = None,
     shock_sbp: Optional[float] = None,
-    comorbidity: str = "none",
-    endoscopic_diagnosis: str = "none",
-    major_stigmata: str = "none",
+    comorbidity: Optional[str] = None,
+    endoscopic_diagnosis: Optional[str] = None,
+    major_stigmata: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Calculate Rockall Score for upper GI bleeding (pre- and post-endoscopy).
@@ -222,7 +244,7 @@ def calculate_rockall(
         major_stigmata: 'none'/'dark_spot', or 'blood'/'visible_vessel'/'active_bleeding'
 
     Returns:
-        Dict with clinical score, endoscopic score, total score, mortality risk.
+        Dict with clinical score, endoscopic score, total score; no uncalibrated mortality estimate.
 
     Raises:
         ValueError: If any input is outside clinically plausible range.
@@ -232,6 +254,13 @@ def calculate_rockall(
         age=age, heart_rate=shock_hr, sbp_mmhg=shock_sbp,
     )
 
+    missing = [key for key, val in (
+        ("age", age), ("shock_hr", shock_hr), ("shock_sbp", shock_sbp),
+        ("comorbidity", comorbidity),
+        ("endoscopic_diagnosis", endoscopic_diagnosis), ("major_stigmata", major_stigmata)
+    ) if val is None]
+    if age is not None and (isinstance(age, bool) or int(age) != age):
+        raise ValueError("age must be a whole number")
     clinical_score = 0
     clinical_components = {}
 
@@ -251,14 +280,19 @@ def calculate_rockall(
         sbp = shock_sbp if shock_sbp is not None else 200
         if sbp < 100:
             clinical_components["shock"] = 2
-        elif hr > 100 and sbp >= 100:
+        elif hr >= 100 and sbp >= 100:
             clinical_components["shock"] = 1
         else:
             clinical_components["shock"] = 0
         clinical_score += clinical_components["shock"]
 
     # Comorbidity
-    comorb_lower = comorbidity.lower().strip()
+    comorb_lower = (comorbidity or "none").lower().strip()
+    valid_comorbidities = {"none", "major", "renal", "liver", "malignancy",
+        "renal_failure", "liver_failure", "disseminated_malignancy",
+        "cardiac", "chf", "ihd", "cardiac_failure", "ischemic_heart_disease"}
+    if comorb_lower not in valid_comorbidities:
+        raise ValueError("Unrecognized comorbidity category")
     if comorb_lower in ("major", "renal", "liver", "malignancy", "renal_failure",
                          "liver_failure", "disseminated_malignancy"):
         clinical_components["comorbidity"] = 3
@@ -274,7 +308,12 @@ def calculate_rockall(
     endo_components = {}
 
     # Diagnosis
-    diag_lower = endoscopic_diagnosis.lower().strip()
+    diag_lower = (endoscopic_diagnosis or "none").lower().strip()
+    valid_diagnoses = {"none", "mallory-weiss", "cancer", "malignant", "gastric_cancer",
+        "peptic_ulcer", "esd", "erosive_disease", "duodenal_ulcer",
+        "gastric_ulcer", "peptic"}
+    if diag_lower not in valid_diagnoses:
+        raise ValueError("Unrecognized endoscopic diagnosis category")
     if diag_lower in ("cancer", "malignant", "gastric_cancer"):
         endo_components["diagnosis"] = 2
     elif diag_lower in ("peptic_ulcer", "esd", "erosive_disease", "duodenal_ulcer",
@@ -285,7 +324,11 @@ def calculate_rockall(
     endo_score += endo_components["diagnosis"]
 
     # Major stigmata of recent hemorrhage
-    stig_lower = major_stigmata.lower().strip()
+    stig_lower = (major_stigmata or "none").lower().strip()
+    valid_stigmata = {"none", "dark_spot", "blood", "visible_vessel",
+        "active_bleeding", "active", "vessel", "blood_in_ugit"}
+    if stig_lower not in valid_stigmata:
+        raise ValueError("Unrecognized endoscopic stigmata category")
     if stig_lower in ("blood", "visible_vessel", "active_bleeding",
                        "active", "vessel", "blood_in_ugit"):
         endo_components["major_stigmata"] = 2
@@ -295,27 +338,26 @@ def calculate_rockall(
 
     total = clinical_score + endo_score
 
-    # Mortality risk lookup (from Rockall et al. 1996)
-    mortality_table = {
-        0: 0.2, 1: 0.4, 2: 2.2, 3: 3.3, 4: 5.3,
-        5: 8.0, 6: 8.0, 7: 14.0, 8: 14.0, 9: 27.0,
-        10: 27.0, 11: 27.0,
-    }
-    mortality_pct = mortality_table.get(min(total, 11), 27.0)
+    # Risk estimates require a calibrated clinical population; do not fabricate
+    # individual mortality percentages from this uncalibrated lookup table.
+    mortality_pct = None
 
     # Risk category
-    if total <= 2:
+    if missing:
+        risk = "Indeterminate"
+        recommendation = "Partial Rockall only; collect missing inputs and assess clinically."
+    elif total <= 2:
         risk = "Low"
-        recommendation = "Low risk of rebleeding and mortality. Consider early discharge."
+        recommendation = "Relatively low Rockall score; disposition requires clinical assessment."
     elif total <= 4:
         risk = "Moderate"
-        recommendation = "Moderate risk. Inpatient monitoring and endoscopic therapy as indicated."
+        recommendation = "Correlate score with clinical course and endoscopic findings."
     elif total <= 6:
         risk = "High"
-        recommendation = "High risk. ICU monitoring, aggressive resuscitation, endoscopic intervention."
+        recommendation = "Senior clinical review advised; score alone does not mandate ICU care."
     else:
         risk = "Very High"
-        recommendation = "Very high mortality risk. ICU care, interventional radiology/surgery consult."
+        recommendation = "Urgent clinical review; interventions depend on bleeding and stability."
 
     return {
         "tool": "rockall-score",
@@ -326,6 +368,8 @@ def calculate_rockall(
         "total_score": total,
         "max_possible_score": 11,
         "mortality_percent": mortality_pct,
+        "score_complete": not missing,
+        "missing_fields": missing,
         "risk_category": risk,
         "recommendation": recommendation,
     }
@@ -341,6 +385,7 @@ def calculate_aims65(
     mental_status_altered: bool = False,
     sbp_mmhg: Optional[float] = None,
     age: Optional[int] = None,
+    mental_status_confirmed: bool = False,
 ) -> Dict[str, Any]:
     """
     Calculate AIMS65 score for in-hospital mortality in upper GI bleeding.
@@ -353,7 +398,7 @@ def calculate_aims65(
         age: Patient age in years
 
     Returns:
-        Dict with total score (0-5), mortality risk, and component breakdown.
+        Dict with total score (0-5) and components; no individual mortality estimate.
 
     Raises:
         ValueError: If any input is outside clinically plausible range.
@@ -364,6 +409,16 @@ def calculate_aims65(
         sbp_mmhg=sbp_mmhg, age=age,
     )
 
+    missing = [key for key, val in (
+        ("albumin_g_dl", albumin_g_dl), ("inr", inr),
+        ("sbp_mmhg", sbp_mmhg), ("age", age)
+    ) if val is None]
+    if age is not None and (isinstance(age, bool) or int(age) != age):
+        raise ValueError("age must be a whole number")
+    if not isinstance(mental_status_altered, bool) or not isinstance(mental_status_confirmed, bool):
+        raise TypeError("Mental status flags must be boolean")
+    if not mental_status_confirmed:
+        missing.append("mental_status_assessment")
     components = {}
     total = 0
 
@@ -383,27 +438,26 @@ def calculate_aims65(
         total += components["sbp_low"]
 
     if age is not None:
-        components["age_elevated"] = 1 if age >= 65 else 0
+        components["age_elevated"] = 1 if age > 65 else 0
         total += components["age_elevated"]
 
-    # Mortality risk by AIMS65 score (Saltzman et al. 2015)
-    mortality_table = {
-        0: 0.3, 1: 1.0, 2: 3.0, 3: 9.5, 4: 15.0, 5: 25.0,
-    }
-    mortality_pct = mortality_table.get(min(total, 5), 25.0)
-
-    if total == 0:
+    # AIMS65 is prognostic; absolute mortality varies across cohorts.
+    mortality_pct = None
+    if missing:
+        risk = "Indeterminate"
+        recommendation = "Partial AIMS65 only; complete all inputs before risk interpretation."
+    elif total == 0:
         risk = "Very Low"
-        recommendation = "Very low in-hospital mortality risk. Standard ward monitoring."
+        recommendation = "No AIMS65 risk factors detected; clinical assessment still required."
     elif total <= 1:
         risk = "Low"
-        recommendation = "Low mortality risk. Standard care with monitoring."
+        recommendation = "Interpret in clinical context; AIMS65 does not determine level of care."
     elif total <= 2:
         risk = "Moderate"
-        recommendation = "Moderate risk. Close monitoring, consider step-down unit."
+        recommendation = "Clinical reassessment indicated; score alone does not determine care setting."
     else:
         risk = "High"
-        recommendation = "High mortality risk. ICU admission recommended."
+        recommendation = "Escalate clinical assessment; score alone does not mandate ICU admission."
 
     return {
         "tool": "aims65",
@@ -411,6 +465,8 @@ def calculate_aims65(
         "max_possible_score": 5,
         "components": components,
         "mortality_percent": mortality_pct,
+        "score_complete": not missing,
+        "missing_fields": missing,
         "risk_category": risk,
         "recommendation": recommendation,
     }
@@ -431,10 +487,12 @@ def triage_gi_bleed(
     syncope: bool = False,
     hepatic_disease: bool = False,
     cardiac_failure: bool = False,
+    history_confirmed: bool = False,
     # AIMS65 parameters
     albumin_g_dl: Optional[float] = None,
     inr: Optional[float] = None,
     mental_status_altered: bool = False,
+    mental_status_confirmed: bool = False,
     age: Optional[int] = None,
     # Rockall post-endoscopy (optional)
     comorbidity: str = "none",
@@ -449,11 +507,13 @@ def triage_gi_bleed(
         sex=sex, sbp_mmhg=sbp_mmhg, heart_rate=heart_rate,
         melena=melena, syncope=syncope,
         hepatic_disease=hepatic_disease, cardiac_failure=cardiac_failure,
+        history_confirmed=history_confirmed,
     )
 
     aims65 = calculate_aims65(
         albumin_g_dl=albumin_g_dl, inr=inr,
         mental_status_altered=mental_status_altered,
+        mental_status_confirmed=mental_status_confirmed,
         sbp_mmhg=sbp_mmhg, age=age,
     )
 
@@ -464,12 +524,17 @@ def triage_gi_bleed(
         major_stigmata=major_stigmata,
     )
 
-    # Overall urgency determination
-    if gbs["total_score"] >= 6 or aims65["total_score"] >= 3 or rockall["total_score"] >= 5:
+    # Descriptive, unvalidated composite prioritization. Incomplete data
+    # must never generate a reassuring LOW result.
+    if (sbp_mmhg is not None and sbp_mmhg < 90) or (hemoglobin_g_dl is not None and hemoglobin_g_dl < 7) or mental_status_altered:
         urgency = "CRITICAL"
-    elif gbs["total_score"] >= 3 or aims65["total_score"] >= 2 or rockall["total_score"] >= 3:
+    elif not gbs["score_complete"] and gbs["total_score"] < 2:
+        urgency = "INDETERMINATE"
+    elif gbs["total_score"] >= 6 or (aims65["score_complete"] and aims65["total_score"] >= 3):
+        urgency = "CRITICAL"
+    elif gbs["total_score"] >= 3 or (aims65["score_complete"] and aims65["total_score"] >= 2):
         urgency = "HIGH"
-    elif gbs["total_score"] >= 1 or aims65["total_score"] >= 1:
+    elif gbs["total_score"] >= 2 or (aims65["score_complete"] and aims65["total_score"] >= 1):
         urgency = "MODERATE"
     else:
         urgency = "LOW"
@@ -480,6 +545,7 @@ def triage_gi_bleed(
         "aims65": aims65,
         "rockall": rockall,
         "overall_urgency": urgency,
+        "clinical_caveat": "Unvalidated composite indicator, not a disposition or treatment recommendation.",
     }
 
 
@@ -501,7 +567,7 @@ def main(argv=None):
 
     # GBS subcommand
     p_gbs = subparsers.add_parser("gbs", help="Calculate Glasgow-Blatchford Score")
-    p_gbs.add_argument("--bun", type=float, help="BUN in mmol/L")
+    p_gbs.add_argument("--bun", "--urea", type=float, help="Blood urea in mmol/L (not BUN)")
     p_gbs.add_argument("--hemoglobin", type=float, help="Hemoglobin in g/dL")
     p_gbs.add_argument("--sex", choices=["male", "female"], default="male")
     p_gbs.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
@@ -510,17 +576,19 @@ def main(argv=None):
     p_gbs.add_argument("--syncope", action="store_true")
     p_gbs.add_argument("--hepatic-disease", action="store_true")
     p_gbs.add_argument("--cardiac-failure", action="store_true")
+    p_gbs.add_argument("--history-confirmed", action="store_true",
+                       help="Confirm all symptoms/comorbidities assessed, including absent findings")
 
     # Rockall subcommand
     p_rock = subparsers.add_parser("rockall", help="Calculate Rockall Score")
     p_rock.add_argument("--age", type=int, help="Patient age")
     p_rock.add_argument("--hr", type=float, help="Heart rate in bpm")
     p_rock.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
-    p_rock.add_argument("--comorbidity", default="none",
+    p_rock.add_argument("--comorbidity", default=None,
                         choices=["none", "cardiac", "major"])
-    p_rock.add_argument("--diagnosis", default="none",
+    p_rock.add_argument("--diagnosis", default=None,
                         choices=["none", "peptic_ulcer", "cancer"])
-    p_rock.add_argument("--stigmata", default="none",
+    p_rock.add_argument("--stigmata", default=None,
                         choices=["none", "blood", "visible_vessel", "active_bleeding"])
 
     # AIMS65 subcommand
@@ -528,12 +596,13 @@ def main(argv=None):
     p_aims.add_argument("--albumin", type=float, help="Albumin in g/dL")
     p_aims.add_argument("--inr", type=float, help="INR")
     p_aims.add_argument("--mental-status-altered", action="store_true")
+    p_aims.add_argument("--mental-status-assessed", action="store_true")
     p_aims.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
     p_aims.add_argument("--age", type=int, help="Patient age")
 
     # Triage subcommand (combined)
     p_triage = subparsers.add_parser("triage", help="Comprehensive triage (all scores)")
-    p_triage.add_argument("--bun", type=float, help="BUN in mmol/L")
+    p_triage.add_argument("--bun", "--urea", type=float, help="Blood urea in mmol/L (not BUN)")
     p_triage.add_argument("--hemoglobin", type=float, help="Hemoglobin in g/dL")
     p_triage.add_argument("--sex", choices=["male", "female"], default="male")
     p_triage.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
@@ -542,13 +611,16 @@ def main(argv=None):
     p_triage.add_argument("--syncope", action="store_true")
     p_triage.add_argument("--hepatic-disease", action="store_true")
     p_triage.add_argument("--cardiac-failure", action="store_true")
+    p_triage.add_argument("--history-confirmed", action="store_true",
+                          help="Confirm symptoms/comorbidities assessed")
     p_triage.add_argument("--albumin", type=float, help="Albumin in g/dL")
     p_triage.add_argument("--inr", type=float, help="INR")
     p_triage.add_argument("--mental-status-altered", action="store_true")
+    p_triage.add_argument("--mental-status-assessed", action="store_true")
     p_triage.add_argument("--age", type=int, help="Patient age")
-    p_triage.add_argument("--comorbidity", default="none")
-    p_triage.add_argument("--diagnosis", default="none")
-    p_triage.add_argument("--stigmata", default="none")
+    p_triage.add_argument("--comorbidity", default=None)
+    p_triage.add_argument("--diagnosis", default=None)
+    p_triage.add_argument("--stigmata", default=None)
 
     # Batch subcommand
     p_batch = subparsers.add_parser("batch", help="Batch process CSV")
@@ -565,6 +637,7 @@ def main(argv=None):
             sex=args.sex, sbp_mmhg=args.sbp, heart_rate=args.heart_rate,
             melena=args.melena, syncope=args.syncope,
             hepatic_disease=args.hepatic_disease, cardiac_failure=args.cardiac_failure,
+            history_confirmed=args.history_confirmed,
         )
         _print_result(result)
 
@@ -581,6 +654,7 @@ def main(argv=None):
         result = calculate_aims65(
             albumin_g_dl=args.albumin, inr=args.inr,
             mental_status_altered=args.mental_status_altered,
+            mental_status_confirmed=args.mental_status_assessed,
             sbp_mmhg=args.sbp, age=args.age,
         )
         _print_result(result)
@@ -591,8 +665,10 @@ def main(argv=None):
             sex=args.sex, sbp_mmhg=args.sbp, heart_rate=args.heart_rate,
             melena=args.melena, syncope=args.syncope,
             hepatic_disease=args.hepatic_disease, cardiac_failure=args.cardiac_failure,
+            history_confirmed=args.history_confirmed,
             albumin_g_dl=args.albumin, inr=args.inr,
-            mental_status_altered=args.mental_status_altered, age=args.age,
+            mental_status_altered=args.mental_status_altered,
+            mental_status_confirmed=args.mental_status_assessed, age=args.age,
             comorbidity=args.comorbidity,
             endoscopic_diagnosis=args.diagnosis,
             major_stigmata=args.stigmata,
@@ -625,12 +701,14 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 syncope=_bool_str(r.get("syncope")),
                 hepatic_disease=_bool_str(r.get("hepatic_disease")),
                 cardiac_failure=_bool_str(r.get("cardiac_failure")),
+                history_confirmed=_bool_str(r.get("history_confirmed")),
             )
         elif score_type == "aims65":
             result = calculate_aims65(
                 albumin_g_dl=_float_or_none(r.get("albumin")),
                 inr=_float_or_none(r.get("inr")),
                 mental_status_altered=_bool_str(r.get("mental_status_altered")),
+                mental_status_confirmed=_bool_str(r.get("mental_status_assessed")),
                 sbp_mmhg=_float_or_none(r.get("sbp")),
                 age=_int_or_none(r.get("age")),
             )
@@ -639,9 +717,9 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 age=_int_or_none(r.get("age")),
                 shock_hr=_float_or_none(r.get("heart_rate")),
                 shock_sbp=_float_or_none(r.get("sbp")),
-                comorbidity=r.get("comorbidity", "none"),
-                endoscopic_diagnosis=r.get("diagnosis", "none"),
-                major_stigmata=r.get("stigmata", "none"),
+                comorbidity=r.get("comorbidity") or None,
+                endoscopic_diagnosis=r.get("diagnosis") or None,
+                major_stigmata=r.get("stigmata") or None,
             )
         else:
             result = triage_gi_bleed(
@@ -654,13 +732,15 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 syncope=_bool_str(r.get("syncope")),
                 hepatic_disease=_bool_str(r.get("hepatic_disease")),
                 cardiac_failure=_bool_str(r.get("cardiac_failure")),
+                history_confirmed=_bool_str(r.get("history_confirmed")),
                 albumin_g_dl=_float_or_none(r.get("albumin")),
                 inr=_float_or_none(r.get("inr")),
                 mental_status_altered=_bool_str(r.get("mental_status_altered")),
+                mental_status_confirmed=_bool_str(r.get("mental_status_assessed")),
                 age=_int_or_none(r.get("age")),
-                comorbidity=r.get("comorbidity", "none"),
-                endoscopic_diagnosis=r.get("diagnosis", "none"),
-                major_stigmata=r.get("stigmata", "none"),
+                comorbidity=r.get("comorbidity") or None,
+                endoscopic_diagnosis=r.get("diagnosis") or None,
+                major_stigmata=r.get("stigmata") or None,
             )
 
         row_dict = dict(r)
@@ -680,24 +760,32 @@ def _float_or_none(val) -> Optional[float]:
     if val is None or val == "":
         return None
     try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
+        number = float(val)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"Invalid numeric CSV value: {val!r}") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"Non-finite CSV value: {val!r}")
+    return number
 
 
 def _int_or_none(val) -> Optional[int]:
     if val is None or val == "":
         return None
-    try:
-        return int(float(val))
-    except (ValueError, TypeError):
-        return None
+    number = _float_or_none(val)
+    if not number.is_integer():
+        raise ValueError(f"Expected an integer in CSV: {val!r}")
+    return int(number)
 
 
 def _bool_str(val) -> bool:
-    if val is None:
+    if val is None or str(val).strip() == "":
         return False
-    return str(val).lower().strip() in ("true", "1", "yes", "y")
+    text = str(val).lower().strip()
+    if text in ("true", "1", "yes", "y"):
+        return True
+    if text in ("false", "0", "no", "n"):
+        return False
+    raise ValueError(f"Invalid boolean CSV value: {val!r}")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ def create_app():
 
         app = FastAPI(
             title="GIBleed Sentinel: Rockall, Blatchford & Endoscopic Hemostasis Audit Agent",
-            description="Stratifies upper vs lower GI bleeding, evaluates Oakland score for discharge, and verifies PPI infusion and pre-endoscopy erythromycin timing.",
+            description="Legacy generic-metric demonstration only. Does not implement validated GI bleeding triage, Oakland scoring, or treatment decisions.",
             version="2.0.0-PRO",
         )
 
@@ -33,7 +33,7 @@ def create_app():
 
         @app.get("/health")
         def health():
-            return {"status": "HEALTHY", "system": "gi-bleed-urgent-triage-agent", "domain": "Gastroenterology", "version": "2.0.0-PRO"}
+            return {"status": "DEMO_ONLY", "system": "gi-bleed-urgent-triage-agent", "version": "2.0.0-PRO", "clinical_validation": False}
 
         @app.post("/api/audit")
         def api_audit(req: AuditRequest):
