@@ -97,6 +97,9 @@ if (typeof document !== "undefined") {
         throw new Error("Enter all AIMS65 values (albumin, INR and age), or leave all three blank.");
       }
       if (provided.length === aimsFields.length) {
+        if (!get("mentalStatusConfirmed").checked) {
+          throw new Error("Confirm mental status assessment to calculate AIMS65.");
+        }
         aims65 = scoreAIMS65({
           albumin: readRequired("albumin"), inr: readRequired("inr"),
           age: readRequired("age"), sbp: input.sbp,
