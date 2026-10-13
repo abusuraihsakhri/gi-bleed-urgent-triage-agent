@@ -81,7 +81,7 @@ def calculate_gbs(
     Calculate Glasgow-Blatchford Score for upper GI bleed risk stratification.
 
     Parameters:
-        bun_mmol_l: Blood urea nitrogen in mmol/L
+        bun_mmol_l: Blood urea in mmol/L (legacy parameter name; NOT BUN units)
         hemoglobin_g_dl: Hemoglobin in g/dL
         sex: 'male' or 'female' (affects hemoglobin scoring)
         sbp_mmhg: Systolic blood pressure in mmHg
@@ -114,7 +114,7 @@ def calculate_gbs(
 
     # BUN scoring (mmol/L)
     if bun_mmol_l is not None:
-        if bun_mmol_l > 25.0:
+        if bun_mmol_l >= 25.0:
             components["bun"] = 6
         elif bun_mmol_l >= 10.0:
             components["bun"] = 4
@@ -567,7 +567,7 @@ def main(argv=None):
 
     # GBS subcommand
     p_gbs = subparsers.add_parser("gbs", help="Calculate Glasgow-Blatchford Score")
-    p_gbs.add_argument("--bun", type=float, help="BUN in mmol/L")
+    p_gbs.add_argument("--bun", "--urea", type=float, help="Blood urea in mmol/L (not BUN)")
     p_gbs.add_argument("--hemoglobin", type=float, help="Hemoglobin in g/dL")
     p_gbs.add_argument("--sex", choices=["male", "female"], default="male")
     p_gbs.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
@@ -602,7 +602,7 @@ def main(argv=None):
 
     # Triage subcommand (combined)
     p_triage = subparsers.add_parser("triage", help="Comprehensive triage (all scores)")
-    p_triage.add_argument("--bun", type=float, help="BUN in mmol/L")
+    p_triage.add_argument("--bun", "--urea", type=float, help="Blood urea in mmol/L (not BUN)")
     p_triage.add_argument("--hemoglobin", type=float, help="Hemoglobin in g/dL")
     p_triage.add_argument("--sex", choices=["male", "female"], default="male")
     p_triage.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
