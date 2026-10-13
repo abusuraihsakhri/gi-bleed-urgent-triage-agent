@@ -186,9 +186,9 @@ def calculate_gbs(
         if not isinstance(value, bool):
             raise TypeError(f"{name} must be boolean")
     # Higher score categories are descriptive, not validated disposition thresholds.
-    if missing and total <= 1:
+    if missing:
         risk = "Indeterminate"
-        recommendation = "Partial GBS: confirm clinical features and missing observations before considering discharge."
+        recommendation = "Partial GBS (minimum observed score shown); complete all inputs before risk interpretation."
     elif total <= 1:
         risk = "Very Low"
         recommendation = "GBS 0-1 may support outpatient follow-up after clinician assessment of stability and other risks."
@@ -443,9 +443,9 @@ def calculate_aims65(
 
     # AIMS65 is prognostic; absolute mortality varies across cohorts.
     mortality_pct = None
-    if missing and total <= 1:
+    if missing:
         risk = "Indeterminate"
-        recommendation = "Partial AIMS65 only; do not infer low mortality risk."
+        recommendation = "Partial AIMS65 only; complete all inputs before risk interpretation."
     elif total == 0:
         risk = "Very Low"
         recommendation = "No AIMS65 risk factors detected; clinical assessment still required."
