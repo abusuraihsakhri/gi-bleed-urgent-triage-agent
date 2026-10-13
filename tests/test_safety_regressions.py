@@ -92,3 +92,34 @@ def test_api_rejects_unexpected_identifiers():
     assert client.post("/api/gbs", json={**fields, "patient_name": "Jane Doe"}).status_code == 422
     assert client.post("/api/gbs", json={**fields, "bun_mmol_l": -2}).status_code == 422
     assert client.get("/health").status_code == 200
+
+
+def test_csv_rejects_invalid_values(tmp_path):
+    from gibleed_sentinel import _run_batch
+    source = tmp_path / "input.csv"
+    output = tmp_path / "output.csv"
+    source.write_text(
+        "bun,hemoglobin,sex,sbp,heart_rate,melena,history_confirmed\n"
+        "not-a-number,15,male,125,75,false,true\n"
+    )
+    with pytest.raises(ValueError, match="Invalid numeric CSV value"):
+        _run_batch(str(source), str(output), "gbs")
+    assert not output.exists()
+
+
+def test_csv_batch_complete_and_partial(tmp_path):
+    import csv
+    from gibleed_sentinel import _run_batch
+    source = tmp_path / "input.csv"
+    output = tmp_path / "output.csv"
+    source.write_text(
+        "bun,hemoglobin,sex,sbp,heart_rate,melena,history_confirmed\n"
+        "4,15,male,125,75,false,true\n"
+        "4,15,male,125,75,false,false\n"
+    )
+    _run_batch(str(source), str(output), "gbs")
+    with output.open(newline="") as file:
+        rows = list(csv.DictReader(file))
+    assert len(rows) == 2
+    assert rows[0]["risk_category"] == "Very Low"
+    assert rows[1]["risk_category"] == "Indeterminate"
