@@ -11,7 +11,7 @@ All formulas are based on published clinical literature. Zero external dependenc
 References:
   - Blatchford O, et al. Lancet 2000;356:1318-21
   - Rockall TA, et al. Gut 1996;38:316-21
-  - Saltzman JR, et al. Am J Gastroenterol 2015;110:18-33 (AIMS65)
+  - Saltzman JR, et al. Gastrointest Endosc 2011;74:1215-1224 (AIMS65)
 
 Author: Dr. Abu Suraih Sakhri
 License: MIT
@@ -244,7 +244,7 @@ def calculate_rockall(
         major_stigmata: 'none'/'dark_spot', or 'blood'/'visible_vessel'/'active_bleeding'
 
     Returns:
-        Dict with clinical score, endoscopic score, total score, mortality risk.
+        Dict with clinical score, endoscopic score, total score; no uncalibrated mortality estimate.
 
     Raises:
         ValueError: If any input is outside clinically plausible range.
@@ -398,7 +398,7 @@ def calculate_aims65(
         age: Patient age in years
 
     Returns:
-        Dict with total score (0-5), mortality risk, and component breakdown.
+        Dict with total score (0-5) and components; no individual mortality estimate.
 
     Raises:
         ValueError: If any input is outside clinically plausible range.
