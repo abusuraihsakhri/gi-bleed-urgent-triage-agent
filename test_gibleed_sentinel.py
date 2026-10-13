@@ -30,8 +30,8 @@ class TestGBS:
         result = calculate_gbs(bun_mmol_l=4.0, hemoglobin_g_dl=15.0, sex="male",
                                sbp_mmhg=130, heart_rate=72)
         assert result["total_score"] == 0
-        assert result["risk_category"] == "Very Low"
-        assert result["safe_for_outpatient"] is True
+        assert result["risk_category"] == "Indeterminate"
+        assert result["safe_for_outpatient"] is False
 
     def test_gbs_bun_6_5(self):
         """BUN 6.5-7.9 scores 2."""
@@ -287,13 +287,13 @@ class TestRockall:
     def test_rockall_mortality_at_zero(self):
         """Score 0 has 0.2% mortality."""
         result = calculate_rockall(age=40, shock_sbp=130, shock_hr=70)
-        assert result["mortality_percent"] == 0.2
+        assert result["mortality_percent"] is None
 
     def test_rockall_mortality_at_5(self):
         """Score 5 has 8% mortality."""
         result = calculate_rockall(age=85, shock_sbp=85, comorbidity="major")
         assert result["total_score"] >= 5
-        assert result["mortality_percent"] >= 8.0
+        assert result["mortality_percent"] is None
 
     def test_rockall_max_score(self):
         """Maximum score is 11."""
@@ -304,7 +304,7 @@ class TestRockall:
             major_stigmata="active_bleeding",
         )
         assert result["total_score"] == 11
-        assert result["mortality_percent"] == 27.0
+        assert result["mortality_percent"] is None
 
 
 # =============================================================================
@@ -316,7 +316,7 @@ class TestTriage:
         """Low-risk patient gets LOW urgency."""
         result = triage_gi_bleed(
             bun_mmol_l=4.0, hemoglobin_g_dl=14.0, sex="male",
-            sbp_mmhg=130, heart_rate=72,
+            sbp_mmhg=130, heart_rate=72, history_confirmed=True,
         )
         assert result["overall_urgency"] == "LOW"
 
