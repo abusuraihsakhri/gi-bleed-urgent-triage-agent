@@ -36,12 +36,14 @@ gi-bleed-urgent-triage-engine aims65 --albumin 2.8 --inr 1.8 --sbp 110 --age 70 
 gi-bleed-urgent-triage-engine rockall --age 70 --hr 88 --sbp 105 --comorbidity none --diagnosis peptic_ulcer --stigmata none
 ```
 
+Note: The legacy input name `bun` / `bun_mmol_l` represents **blood urea in mmol/L**, not blood urea nitrogen in mg/dL or mmol/L. The CLI also accepts `--urea`. Do not mix units.
+
 The equivalent repository entry point is `python cli.py`. The flags `--history-confirmed` and `--mental-status-assessed` signify that negative findings have been **assessed**, not merely omitted. Without required clinical observations, score outputs are explicitly labeled indeterminate. All CLI commands print JSON.
 
 Batch CSV mode is also available:
 
 ```bash
-python cli.py batch -i patients.csv -o results.csv --score gbs
+python cli.py batch -i sample_gbs.csv -o results.csv --score gbs
 ```
 
 Input columns follow CLI parameter names without hyphens (e.g. `bun`, `hemoglobin`, `sbp`, `heart_rate`, `sex`, `history_confirmed`). Invalid nonempty numeric and boolean values cause errors rather than silent coercion. Batch processing is local, but source and result CSVs **may contain sensitive patient data**: protect them appropriately.
