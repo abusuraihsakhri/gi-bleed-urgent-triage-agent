@@ -62,7 +62,7 @@ def health():
 
 @app.post("/api/gbs")
 def gbs(req: GBSRequest):
-    return calculate_gbs(**req.model_dump())
+    return calculate_gbs(**req.model_dump(), history_confirmed=True)
 
 
 @app.post("/api/aims65")
