@@ -20,7 +20,7 @@ function scoreGBS(p) {
   for (const key of ["melena", "syncope", "hepaticDisease", "cardiacFailure"]) flag(p[key], key);
   if (p.historyConfirmed !== true) throw new Error("Confirm that all four clinical features were assessed.");
   const components = {
-    bun: bun > 25 ? 6 : bun >= 10 ? 4 : bun >= 8 ? 3 : bun >= 6.5 ? 2 : 0,
+    bun: bun >= 25 ? 6 : bun >= 10 ? 4 : bun >= 8 ? 3 : bun >= 6.5 ? 2 : 0,
     hemoglobin: p.sex === "male"
       ? (hb < 10 ? 6 : hb < 12 ? 3 : hb < 13 ? 1 : 0)
       : (hb < 10 ? 6 : hb < 12 ? 1 : 0),
