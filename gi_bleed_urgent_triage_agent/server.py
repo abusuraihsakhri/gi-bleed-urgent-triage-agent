@@ -33,7 +33,7 @@ def create_app():
 
         @app.get("/health")
         def health():
-            return {"status": "HEALTHY", "system": "gi-bleed-urgent-triage-agent", "domain": "Gastroenterology", "version": "2.0.0-PRO"}
+            return {"status": "DEMO_ONLY", "system": "gi-bleed-urgent-triage-agent", "version": "2.0.0-PRO", "clinical_validation": False}
 
         @app.post("/api/audit")
         def api_audit(req: AuditRequest):
