@@ -165,7 +165,7 @@ class TestAIMS65:
         """All normal values give score 0."""
         result = calculate_aims65(albumin_g_dl=4.0, inr=1.0,
                                   mental_status_altered=False,
-                                  sbp_mmhg=120, age=50)
+                                  sbp_mmhg=120, age=50, mental_status_confirmed=True)
         assert result["total_score"] == 0
         assert result["risk_category"] == "Very Low"
 
