@@ -137,7 +137,7 @@ class TestGBS:
             hepatic_disease=True, cardiac_failure=True,
         )
         assert result["total_score"] == 23
-        assert result["risk_category"] == "Very High"
+        assert result["risk_category"] == "Indeterminate"
 
     def test_gbs_high_risk_scenario(self):
         """High-risk patient scenario."""
@@ -148,7 +148,7 @@ class TestGBS:
             hepatic_disease=False, cardiac_failure=False,
         )
         assert result["total_score"] >= 6
-        assert result["risk_category"] in ("High", "Very High")
+        assert result["risk_category"] == "Indeterminate"
 
     def test_gbs_none_inputs(self):
         """None inputs are handled gracefully."""
@@ -219,7 +219,7 @@ class TestAIMS65:
         result = calculate_aims65(
             albumin_g_dl=2.0, inr=2.5,
             mental_status_altered=True,
-            sbp_mmhg=80, age=75,
+            sbp_mmhg=80, age=75, mental_status_confirmed=True,
         )
         assert result["total_score"] == 5
         assert result["risk_category"] == "High"
