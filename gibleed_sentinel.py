@@ -181,6 +181,10 @@ def calculate_gbs(
         raise TypeError("history_confirmed must be boolean")
     if not history_confirmed:
         missing.append("clinical_features_confirmation")
+    for name, value in (("melena", melena), ("syncope", syncope),
+                        ("hepatic_disease", hepatic_disease), ("cardiac_failure", cardiac_failure)):
+        if not isinstance(value, bool):
+            raise TypeError(f"{name} must be boolean")
     # Higher score categories are descriptive, not validated disposition thresholds.
     if missing and total <= 1:
         risk = "Indeterminate"
@@ -224,9 +228,9 @@ def calculate_rockall(
     age: Optional[int] = None,
     shock_hr: Optional[float] = None,
     shock_sbp: Optional[float] = None,
-    comorbidity: str = "none",
-    endoscopic_diagnosis: str = "none",
-    major_stigmata: str = "none",
+    comorbidity: Optional[str] = None,
+    endoscopic_diagnosis: Optional[str] = None,
+    major_stigmata: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Calculate Rockall Score for upper GI bleeding (pre- and post-endoscopy).
@@ -252,8 +256,11 @@ def calculate_rockall(
 
     missing = [key for key, val in (
         ("age", age), ("shock_hr", shock_hr), ("shock_sbp", shock_sbp),
+        ("comorbidity", comorbidity),
         ("endoscopic_diagnosis", endoscopic_diagnosis), ("major_stigmata", major_stigmata)
     ) if val is None]
+    if age is not None and (isinstance(age, bool) or int(age) != age):
+        raise ValueError("age must be a whole number")
     clinical_score = 0
     clinical_components = {}
 
@@ -280,7 +287,12 @@ def calculate_rockall(
         clinical_score += clinical_components["shock"]
 
     # Comorbidity
-    comorb_lower = comorbidity.lower().strip()
+    comorb_lower = (comorbidity or "none").lower().strip()
+    valid_comorbidities = {"none", "major", "renal", "liver", "malignancy",
+        "renal_failure", "liver_failure", "disseminated_malignancy",
+        "cardiac", "chf", "ihd", "cardiac_failure", "ischemic_heart_disease"}
+    if comorb_lower not in valid_comorbidities:
+        raise ValueError("Unrecognized comorbidity category")
     if comorb_lower in ("major", "renal", "liver", "malignancy", "renal_failure",
                          "liver_failure", "disseminated_malignancy"):
         clinical_components["comorbidity"] = 3
@@ -296,7 +308,12 @@ def calculate_rockall(
     endo_components = {}
 
     # Diagnosis
-    diag_lower = endoscopic_diagnosis.lower().strip()
+    diag_lower = (endoscopic_diagnosis or "none").lower().strip()
+    valid_diagnoses = {"none", "mallory-weiss", "cancer", "malignant", "gastric_cancer",
+        "peptic_ulcer", "esd", "erosive_disease", "duodenal_ulcer",
+        "gastric_ulcer", "peptic"}
+    if diag_lower not in valid_diagnoses:
+        raise ValueError("Unrecognized endoscopic diagnosis category")
     if diag_lower in ("cancer", "malignant", "gastric_cancer"):
         endo_components["diagnosis"] = 2
     elif diag_lower in ("peptic_ulcer", "esd", "erosive_disease", "duodenal_ulcer",
@@ -307,7 +324,11 @@ def calculate_rockall(
     endo_score += endo_components["diagnosis"]
 
     # Major stigmata of recent hemorrhage
-    stig_lower = major_stigmata.lower().strip()
+    stig_lower = (major_stigmata or "none").lower().strip()
+    valid_stigmata = {"none", "dark_spot", "blood", "visible_vessel",
+        "active_bleeding", "active", "vessel", "blood_in_ugit"}
+    if stig_lower not in valid_stigmata:
+        raise ValueError("Unrecognized endoscopic stigmata category")
     if stig_lower in ("blood", "visible_vessel", "active_bleeding",
                        "active", "vessel", "blood_in_ugit"):
         endo_components["major_stigmata"] = 2
@@ -364,6 +385,7 @@ def calculate_aims65(
     mental_status_altered: bool = False,
     sbp_mmhg: Optional[float] = None,
     age: Optional[int] = None,
+    mental_status_confirmed: bool = False,
 ) -> Dict[str, Any]:
     """
     Calculate AIMS65 score for in-hospital mortality in upper GI bleeding.
@@ -391,6 +413,12 @@ def calculate_aims65(
         ("albumin_g_dl", albumin_g_dl), ("inr", inr),
         ("sbp_mmhg", sbp_mmhg), ("age", age)
     ) if val is None]
+    if age is not None and (isinstance(age, bool) or int(age) != age):
+        raise ValueError("age must be a whole number")
+    if not isinstance(mental_status_altered, bool) or not isinstance(mental_status_confirmed, bool):
+        raise TypeError("Mental status flags must be boolean")
+    if not mental_status_confirmed:
+        missing.append("mental_status_assessment")
     components = {}
     total = 0
 
@@ -415,7 +443,7 @@ def calculate_aims65(
 
     # AIMS65 is prognostic; absolute mortality varies across cohorts.
     mortality_pct = None
-    if missing:
+    if missing and total <= 1:
         risk = "Indeterminate"
         recommendation = "Partial AIMS65 only; do not infer low mortality risk."
     elif total == 0:
@@ -464,6 +492,7 @@ def triage_gi_bleed(
     albumin_g_dl: Optional[float] = None,
     inr: Optional[float] = None,
     mental_status_altered: bool = False,
+    mental_status_confirmed: bool = False,
     age: Optional[int] = None,
     # Rockall post-endoscopy (optional)
     comorbidity: str = "none",
@@ -484,6 +513,7 @@ def triage_gi_bleed(
     aims65 = calculate_aims65(
         albumin_g_dl=albumin_g_dl, inr=inr,
         mental_status_altered=mental_status_altered,
+        mental_status_confirmed=mental_status_confirmed,
         sbp_mmhg=sbp_mmhg, age=age,
     )
 
@@ -554,11 +584,11 @@ def main(argv=None):
     p_rock.add_argument("--age", type=int, help="Patient age")
     p_rock.add_argument("--hr", type=float, help="Heart rate in bpm")
     p_rock.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
-    p_rock.add_argument("--comorbidity", default="none",
+    p_rock.add_argument("--comorbidity", default=None,
                         choices=["none", "cardiac", "major"])
-    p_rock.add_argument("--diagnosis", default="none",
+    p_rock.add_argument("--diagnosis", default=None,
                         choices=["none", "peptic_ulcer", "cancer"])
-    p_rock.add_argument("--stigmata", default="none",
+    p_rock.add_argument("--stigmata", default=None,
                         choices=["none", "blood", "visible_vessel", "active_bleeding"])
 
     # AIMS65 subcommand
@@ -566,6 +596,7 @@ def main(argv=None):
     p_aims.add_argument("--albumin", type=float, help="Albumin in g/dL")
     p_aims.add_argument("--inr", type=float, help="INR")
     p_aims.add_argument("--mental-status-altered", action="store_true")
+    p_aims.add_argument("--mental-status-assessed", action="store_true")
     p_aims.add_argument("--sbp", type=float, help="Systolic BP in mmHg")
     p_aims.add_argument("--age", type=int, help="Patient age")
 
@@ -585,10 +616,11 @@ def main(argv=None):
     p_triage.add_argument("--albumin", type=float, help="Albumin in g/dL")
     p_triage.add_argument("--inr", type=float, help="INR")
     p_triage.add_argument("--mental-status-altered", action="store_true")
+    p_triage.add_argument("--mental-status-assessed", action="store_true")
     p_triage.add_argument("--age", type=int, help="Patient age")
-    p_triage.add_argument("--comorbidity", default="none")
-    p_triage.add_argument("--diagnosis", default="none")
-    p_triage.add_argument("--stigmata", default="none")
+    p_triage.add_argument("--comorbidity", default=None)
+    p_triage.add_argument("--diagnosis", default=None)
+    p_triage.add_argument("--stigmata", default=None)
 
     # Batch subcommand
     p_batch = subparsers.add_parser("batch", help="Batch process CSV")
@@ -622,6 +654,7 @@ def main(argv=None):
         result = calculate_aims65(
             albumin_g_dl=args.albumin, inr=args.inr,
             mental_status_altered=args.mental_status_altered,
+            mental_status_confirmed=args.mental_status_assessed,
             sbp_mmhg=args.sbp, age=args.age,
         )
         _print_result(result)
@@ -634,7 +667,8 @@ def main(argv=None):
             hepatic_disease=args.hepatic_disease, cardiac_failure=args.cardiac_failure,
             history_confirmed=args.history_confirmed,
             albumin_g_dl=args.albumin, inr=args.inr,
-            mental_status_altered=args.mental_status_altered, age=args.age,
+            mental_status_altered=args.mental_status_altered,
+            mental_status_confirmed=args.mental_status_assessed, age=args.age,
             comorbidity=args.comorbidity,
             endoscopic_diagnosis=args.diagnosis,
             major_stigmata=args.stigmata,
@@ -674,6 +708,7 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 albumin_g_dl=_float_or_none(r.get("albumin")),
                 inr=_float_or_none(r.get("inr")),
                 mental_status_altered=_bool_str(r.get("mental_status_altered")),
+                mental_status_confirmed=_bool_str(r.get("mental_status_assessed")),
                 sbp_mmhg=_float_or_none(r.get("sbp")),
                 age=_int_or_none(r.get("age")),
             )
@@ -701,6 +736,7 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 albumin_g_dl=_float_or_none(r.get("albumin")),
                 inr=_float_or_none(r.get("inr")),
                 mental_status_altered=_bool_str(r.get("mental_status_altered")),
+                mental_status_confirmed=_bool_str(r.get("mental_status_assessed")),
                 age=_int_or_none(r.get("age")),
                 comorbidity=r.get("comorbidity", "none"),
                 endoscopic_diagnosis=r.get("diagnosis", "none"),
