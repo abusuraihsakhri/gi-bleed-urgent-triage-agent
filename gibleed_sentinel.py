@@ -75,6 +75,7 @@ def calculate_gbs(
     syncope: bool = False,
     hepatic_disease: bool = False,
     cardiac_failure: bool = False,
+    history_confirmed: bool = False,
 ) -> Dict[str, Any]:
     """
     Calculate Glasgow-Blatchford Score for upper GI bleed risk stratification.
@@ -176,10 +177,14 @@ def calculate_gbs(
     components["cardiac_failure"] = 2 if cardiac_failure else 0
     total += components["cardiac_failure"]
 
+    if not isinstance(history_confirmed, bool):
+        raise TypeError("history_confirmed must be boolean")
+    if not history_confirmed:
+        missing.append("clinical_features_confirmation")
     # Higher score categories are descriptive, not validated disposition thresholds.
-    if missing:
+    if missing and total <= 1:
         risk = "Indeterminate"
-        recommendation = "Partial GBS only; obtain missing parameters before interpreting risk or considering discharge."
+        recommendation = "Partial GBS: confirm clinical features and missing observations before considering discharge."
     elif total <= 1:
         risk = "Very Low"
         recommendation = "GBS 0-1 may support outpatient follow-up after clinician assessment of stability and other risks."
@@ -453,6 +458,7 @@ def triage_gi_bleed(
     syncope: bool = False,
     hepatic_disease: bool = False,
     cardiac_failure: bool = False,
+    history_confirmed: bool = False,
     # AIMS65 parameters
     albumin_g_dl: Optional[float] = None,
     inr: Optional[float] = None,
@@ -471,6 +477,7 @@ def triage_gi_bleed(
         sex=sex, sbp_mmhg=sbp_mmhg, heart_rate=heart_rate,
         melena=melena, syncope=syncope,
         hepatic_disease=hepatic_disease, cardiac_failure=cardiac_failure,
+        history_confirmed=history_confirmed,
     )
 
     aims65 = calculate_aims65(
@@ -490,7 +497,7 @@ def triage_gi_bleed(
     # must never generate a reassuring LOW result.
     if (sbp_mmhg is not None and sbp_mmhg < 90) or (hemoglobin_g_dl is not None and hemoglobin_g_dl < 7) or mental_status_altered:
         urgency = "CRITICAL"
-    elif not gbs["score_complete"]:
+    elif not gbs["score_complete"] and gbs["total_score"] < 2:
         urgency = "INDETERMINATE"
     elif gbs["total_score"] >= 6 or (aims65["score_complete"] and aims65["total_score"] >= 3):
         urgency = "CRITICAL"
@@ -538,6 +545,8 @@ def main(argv=None):
     p_gbs.add_argument("--syncope", action="store_true")
     p_gbs.add_argument("--hepatic-disease", action="store_true")
     p_gbs.add_argument("--cardiac-failure", action="store_true")
+    p_gbs.add_argument("--history-confirmed", action="store_true",
+                       help="Confirm all symptoms/comorbidities assessed, including absent findings")
 
     # Rockall subcommand
     p_rock = subparsers.add_parser("rockall", help="Calculate Rockall Score")
@@ -570,6 +579,8 @@ def main(argv=None):
     p_triage.add_argument("--syncope", action="store_true")
     p_triage.add_argument("--hepatic-disease", action="store_true")
     p_triage.add_argument("--cardiac-failure", action="store_true")
+    p_triage.add_argument("--history-confirmed", action="store_true",
+                          help="Confirm symptoms/comorbidities assessed")
     p_triage.add_argument("--albumin", type=float, help="Albumin in g/dL")
     p_triage.add_argument("--inr", type=float, help="INR")
     p_triage.add_argument("--mental-status-altered", action="store_true")
@@ -593,6 +604,7 @@ def main(argv=None):
             sex=args.sex, sbp_mmhg=args.sbp, heart_rate=args.heart_rate,
             melena=args.melena, syncope=args.syncope,
             hepatic_disease=args.hepatic_disease, cardiac_failure=args.cardiac_failure,
+            history_confirmed=args.history_confirmed,
         )
         _print_result(result)
 
@@ -619,6 +631,7 @@ def main(argv=None):
             sex=args.sex, sbp_mmhg=args.sbp, heart_rate=args.heart_rate,
             melena=args.melena, syncope=args.syncope,
             hepatic_disease=args.hepatic_disease, cardiac_failure=args.cardiac_failure,
+            history_confirmed=args.history_confirmed,
             albumin_g_dl=args.albumin, inr=args.inr,
             mental_status_altered=args.mental_status_altered, age=args.age,
             comorbidity=args.comorbidity,
@@ -653,6 +666,7 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 syncope=_bool_str(r.get("syncope")),
                 hepatic_disease=_bool_str(r.get("hepatic_disease")),
                 cardiac_failure=_bool_str(r.get("cardiac_failure")),
+                history_confirmed=_bool_str(r.get("history_confirmed")),
             )
         elif score_type == "aims65":
             result = calculate_aims65(
@@ -682,6 +696,7 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 syncope=_bool_str(r.get("syncope")),
                 hepatic_disease=_bool_str(r.get("hepatic_disease")),
                 cardiac_failure=_bool_str(r.get("cardiac_failure")),
+                history_confirmed=_bool_str(r.get("history_confirmed")),
                 albumin_g_dl=_float_or_none(r.get("albumin")),
                 inr=_float_or_none(r.get("inr")),
                 mental_status_altered=_bool_str(r.get("mental_status_altered")),
@@ -708,24 +723,32 @@ def _float_or_none(val) -> Optional[float]:
     if val is None or val == "":
         return None
     try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
+        number = float(val)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"Invalid numeric CSV value: {val!r}") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"Non-finite CSV value: {val!r}")
+    return number
 
 
 def _int_or_none(val) -> Optional[int]:
     if val is None or val == "":
         return None
-    try:
-        return int(float(val))
-    except (ValueError, TypeError):
-        return None
+    number = _float_or_none(val)
+    if not number.is_integer():
+        raise ValueError(f"Expected an integer in CSV: {val!r}")
+    return int(number)
 
 
 def _bool_str(val) -> bool:
-    if val is None:
+    if val is None or str(val).strip() == "":
         return False
-    return str(val).lower().strip() in ("true", "1", "yes", "y")
+    text = str(val).lower().strip()
+    if text in ("true", "1", "yes", "y"):
+        return True
+    if text in ("false", "0", "no", "n"):
+        return False
+    raise ValueError(f"Invalid boolean CSV value: {val!r}")
 
 
 if __name__ == "__main__":
