@@ -45,7 +45,7 @@ def _validate_range(name: str, value: Optional[float], min_val: float, max_val: 
     """Validate that a numeric value falls within an acceptable clinical range."""
     if value is None:
         return
-    if not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a number, got {type(value).__name__}")
     if math.isnan(value) or math.isinf(value):
         raise ValueError(f"{name} must be a finite number, got {value}")
@@ -102,12 +102,18 @@ def calculate_gbs(
         sbp_mmhg=sbp_mmhg, heart_rate=heart_rate,
     )
 
+    if not isinstance(sex, str) or sex.lower() not in ("male", "female"):
+        raise ValueError("sex must be 'male' or 'female'")
+    missing = [key for key, val in (
+        ("bun_mmol_l", bun_mmol_l), ("hemoglobin_g_dl", hemoglobin_g_dl),
+        ("sbp_mmhg", sbp_mmhg), ("heart_rate", heart_rate)
+    ) if val is None]
     components = {}
     total = 0
 
     # BUN scoring (mmol/L)
     if bun_mmol_l is not None:
-        if bun_mmol_l >= 25.0:
+        if bun_mmol_l > 25.0:
             components["bun"] = 6
         elif bun_mmol_l >= 10.0:
             components["bun"] = 4
@@ -127,7 +133,7 @@ def calculate_gbs(
                 components["hemoglobin"] = 6
             elif hemoglobin_g_dl < 12.0:
                 components["hemoglobin"] = 3
-            elif hemoglobin_g_dl <= 12.9:
+            elif hemoglobin_g_dl < 13.0:
                 components["hemoglobin"] = 1
             else:
                 components["hemoglobin"] = 0
@@ -170,22 +176,25 @@ def calculate_gbs(
     components["cardiac_failure"] = 2 if cardiac_failure else 0
     total += components["cardiac_failure"]
 
-    # Risk stratification
-    if total == 0:
+    # Higher score categories are descriptive, not validated disposition thresholds.
+    if missing:
+        risk = "Indeterminate"
+        recommendation = "Partial GBS only; obtain missing parameters before interpreting risk or considering discharge."
+    elif total <= 1:
         risk = "Very Low"
-        recommendation = "Safe for outpatient management. Consider outpatient endoscopy if indicated."
+        recommendation = "GBS 0-1 may support outpatient follow-up after clinician assessment of stability and other risks."
     elif total <= 3:
         risk = "Low"
-        recommendation = "Consider outpatient management with close follow-up."
+        recommendation = "Clinical assessment required; GBS above 1 does not meet the ACG very-low-risk discharge criterion."
     elif total <= 5:
         risk = "Moderate"
-        recommendation = "Inpatient monitoring recommended. Urgent endoscopy within 24 hours."
+        recommendation = "Assess clinically; GBS category alone does not determine treatment or endoscopy timing."
     elif total <= 8:
         risk = "High"
-        recommendation = "Requires inpatient care. Urgent endoscopy. Consider ICU admission."
+        recommendation = "Prompt senior clinical assessment; stabilize and investigate as indicated."
     else:
         risk = "Very High"
-        recommendation = "ICU admission. Immediate resuscitation and urgent endoscopy."
+        recommendation = "Urgent clinical evaluation and resuscitation if indicated; score alone does not mandate ICU care."
 
     return {
         "tool": "glasgow-blatchford-score",
@@ -194,7 +203,10 @@ def calculate_gbs(
         "components": components,
         "risk_category": risk,
         "recommendation": recommendation,
-        "safe_for_outpatient": total == 0,
+        "score_complete": not missing,
+        "missing_fields": missing,
+        "safe_for_outpatient": not missing and total <= 1,
+        "clinical_caveat": "Screening score only; does not replace clinician judgment.",
     }
 
 
@@ -232,6 +244,10 @@ def calculate_rockall(
         age=age, heart_rate=shock_hr, sbp_mmhg=shock_sbp,
     )
 
+    missing = [key for key, val in (
+        ("age", age), ("shock_hr", shock_hr), ("shock_sbp", shock_sbp),
+        ("endoscopic_diagnosis", endoscopic_diagnosis), ("major_stigmata", major_stigmata)
+    ) if val is None]
     clinical_score = 0
     clinical_components = {}
 
@@ -251,7 +267,7 @@ def calculate_rockall(
         sbp = shock_sbp if shock_sbp is not None else 200
         if sbp < 100:
             clinical_components["shock"] = 2
-        elif hr > 100 and sbp >= 100:
+        elif hr >= 100 and sbp >= 100:
             clinical_components["shock"] = 1
         else:
             clinical_components["shock"] = 0
@@ -295,27 +311,26 @@ def calculate_rockall(
 
     total = clinical_score + endo_score
 
-    # Mortality risk lookup (from Rockall et al. 1996)
-    mortality_table = {
-        0: 0.2, 1: 0.4, 2: 2.2, 3: 3.3, 4: 5.3,
-        5: 8.0, 6: 8.0, 7: 14.0, 8: 14.0, 9: 27.0,
-        10: 27.0, 11: 27.0,
-    }
-    mortality_pct = mortality_table.get(min(total, 11), 27.0)
+    # Risk estimates require a calibrated clinical population; do not fabricate
+    # individual mortality percentages from this uncalibrated lookup table.
+    mortality_pct = None
 
     # Risk category
-    if total <= 2:
+    if missing:
+        risk = "Indeterminate"
+        recommendation = "Partial Rockall only; collect missing inputs and assess clinically."
+    elif total <= 2:
         risk = "Low"
-        recommendation = "Low risk of rebleeding and mortality. Consider early discharge."
+        recommendation = "Relatively low Rockall score; disposition requires clinical assessment."
     elif total <= 4:
         risk = "Moderate"
-        recommendation = "Moderate risk. Inpatient monitoring and endoscopic therapy as indicated."
+        recommendation = "Correlate score with clinical course and endoscopic findings."
     elif total <= 6:
         risk = "High"
-        recommendation = "High risk. ICU monitoring, aggressive resuscitation, endoscopic intervention."
+        recommendation = "Senior clinical review advised; score alone does not mandate ICU care."
     else:
         risk = "Very High"
-        recommendation = "Very high mortality risk. ICU care, interventional radiology/surgery consult."
+        recommendation = "Urgent clinical review; interventions depend on bleeding and stability."
 
     return {
         "tool": "rockall-score",
@@ -326,6 +341,8 @@ def calculate_rockall(
         "total_score": total,
         "max_possible_score": 11,
         "mortality_percent": mortality_pct,
+        "score_complete": not missing,
+        "missing_fields": missing,
         "risk_category": risk,
         "recommendation": recommendation,
     }
@@ -364,6 +381,10 @@ def calculate_aims65(
         sbp_mmhg=sbp_mmhg, age=age,
     )
 
+    missing = [key for key, val in (
+        ("albumin_g_dl", albumin_g_dl), ("inr", inr),
+        ("sbp_mmhg", sbp_mmhg), ("age", age)
+    ) if val is None]
     components = {}
     total = 0
 
@@ -383,27 +404,26 @@ def calculate_aims65(
         total += components["sbp_low"]
 
     if age is not None:
-        components["age_elevated"] = 1 if age >= 65 else 0
+        components["age_elevated"] = 1 if age > 65 else 0
         total += components["age_elevated"]
 
-    # Mortality risk by AIMS65 score (Saltzman et al. 2015)
-    mortality_table = {
-        0: 0.3, 1: 1.0, 2: 3.0, 3: 9.5, 4: 15.0, 5: 25.0,
-    }
-    mortality_pct = mortality_table.get(min(total, 5), 25.0)
-
-    if total == 0:
+    # AIMS65 is prognostic; absolute mortality varies across cohorts.
+    mortality_pct = None
+    if missing:
+        risk = "Indeterminate"
+        recommendation = "Partial AIMS65 only; do not infer low mortality risk."
+    elif total == 0:
         risk = "Very Low"
-        recommendation = "Very low in-hospital mortality risk. Standard ward monitoring."
+        recommendation = "No AIMS65 risk factors detected; clinical assessment still required."
     elif total <= 1:
         risk = "Low"
-        recommendation = "Low mortality risk. Standard care with monitoring."
+        recommendation = "Interpret in clinical context; AIMS65 does not determine level of care."
     elif total <= 2:
         risk = "Moderate"
-        recommendation = "Moderate risk. Close monitoring, consider step-down unit."
+        recommendation = "Clinical reassessment indicated; score alone does not determine care setting."
     else:
         risk = "High"
-        recommendation = "High mortality risk. ICU admission recommended."
+        recommendation = "Escalate clinical assessment; score alone does not mandate ICU admission."
 
     return {
         "tool": "aims65",
@@ -411,6 +431,8 @@ def calculate_aims65(
         "max_possible_score": 5,
         "components": components,
         "mortality_percent": mortality_pct,
+        "score_complete": not missing,
+        "missing_fields": missing,
         "risk_category": risk,
         "recommendation": recommendation,
     }
@@ -464,12 +486,17 @@ def triage_gi_bleed(
         major_stigmata=major_stigmata,
     )
 
-    # Overall urgency determination
-    if gbs["total_score"] >= 6 or aims65["total_score"] >= 3 or rockall["total_score"] >= 5:
+    # Descriptive, unvalidated composite prioritization. Incomplete data
+    # must never generate a reassuring LOW result.
+    if (sbp_mmhg is not None and sbp_mmhg < 90) or (hemoglobin_g_dl is not None and hemoglobin_g_dl < 7) or mental_status_altered:
         urgency = "CRITICAL"
-    elif gbs["total_score"] >= 3 or aims65["total_score"] >= 2 or rockall["total_score"] >= 3:
+    elif not gbs["score_complete"]:
+        urgency = "INDETERMINATE"
+    elif gbs["total_score"] >= 6 or (aims65["score_complete"] and aims65["total_score"] >= 3):
+        urgency = "CRITICAL"
+    elif gbs["total_score"] >= 3 or (aims65["score_complete"] and aims65["total_score"] >= 2):
         urgency = "HIGH"
-    elif gbs["total_score"] >= 1 or aims65["total_score"] >= 1:
+    elif gbs["total_score"] >= 2 or (aims65["score_complete"] and aims65["total_score"] >= 1):
         urgency = "MODERATE"
     else:
         urgency = "LOW"
@@ -480,6 +507,7 @@ def triage_gi_bleed(
         "aims65": aims65,
         "rockall": rockall,
         "overall_urgency": urgency,
+        "clinical_caveat": "Unvalidated composite indicator, not a disposition or treatment recommendation.",
     }
 
 
