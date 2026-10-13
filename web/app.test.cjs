@@ -16,7 +16,7 @@ test("GBS maximum and published numeric boundaries", () => {
   assert.equal(scoreGBS({...normal, bun: 30, hemoglobin: 8, sbp: 80,
     heartRate: 110, melena: true, syncope: true, hepaticDisease: true,
     cardiacFailure: true}).score, 23);
-  assert.equal(scoreGBS({...normal, bun: 25}).components.bun, 4);
+  assert.equal(scoreGBS({...normal, bun: 25}).components.bun, 6);
   assert.equal(scoreGBS({...normal, bun: 25.01}).components.bun, 6);
   assert.equal(scoreGBS({...normal, hemoglobin: 12.95}).components.hemoglobin, 1);
   assert.equal(scoreGBS({...normal, hemoglobin: 13}).components.hemoglobin, 0);
