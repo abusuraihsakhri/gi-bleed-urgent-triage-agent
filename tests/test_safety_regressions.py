@@ -20,10 +20,11 @@ def test_gbs_incomplete_cannot_clear_for_outpatient():
 def test_gbs_very_low_risk_boundary():
     inputs = dict(bun_mmol_l=4, hemoglobin_g_dl=15, sex="male",
                   sbp_mmhg=130, heart_rate=80)
-    result = calculate_gbs(**inputs, melena=True)
+    result = calculate_gbs(**inputs, melena=True, history_confirmed=True)
     assert result["total_score"] == 1
-    assert result["safe_for_outpatient"] is True
-    assert calculate_gbs(**inputs, syncope=True)["safe_for_outpatient"] is False
+    assert result["meets_very_low_risk_criterion"] is True
+    assert result["safe_for_outpatient"] is False
+    assert calculate_gbs(**inputs, syncope=True, history_confirmed=True)["meets_very_low_risk_criterion"] is False
 
 
 def test_gbs_bun_and_hemoglobin_boundaries():
@@ -85,7 +86,8 @@ def test_api_rejects_unexpected_identifiers():
                   hepatic_disease=False, cardiac_failure=False)
     res = client.post("/api/gbs", json=fields)
     assert res.status_code == 200 and res.json()["score_complete"]
-    assert res.json()["safe_for_outpatient"]
+    assert res.json()["meets_very_low_risk_criterion"]
+    assert res.json()["safe_for_outpatient"] is False
     assert res.headers["Cache-Control"] == "no-store"
     assert client.post("/api/gbs", json={**fields, "patient_name": "Jane Doe"}).status_code == 422
     assert client.post("/api/gbs", json={**fields, "bun_mmol_l": -2}).status_code == 422
