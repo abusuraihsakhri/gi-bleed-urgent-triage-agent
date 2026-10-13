@@ -14,7 +14,7 @@ def create_app():
 
         app = FastAPI(
             title="GIBleed Sentinel: Rockall, Blatchford & Endoscopic Hemostasis Audit Agent",
-            description="Stratifies upper vs lower GI bleeding, evaluates Oakland score for discharge, and verifies PPI infusion and pre-endoscopy erythromycin timing.",
+            description="Legacy generic-metric demonstration only. Does not implement validated GI bleeding triage, Oakland scoring, or treatment decisions.",
             version="2.0.0-PRO",
         )
 
