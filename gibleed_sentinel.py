@@ -717,9 +717,9 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 age=_int_or_none(r.get("age")),
                 shock_hr=_float_or_none(r.get("heart_rate")),
                 shock_sbp=_float_or_none(r.get("sbp")),
-                comorbidity=r.get("comorbidity", "none"),
-                endoscopic_diagnosis=r.get("diagnosis", "none"),
-                major_stigmata=r.get("stigmata", "none"),
+                comorbidity=r.get("comorbidity") or None,
+                endoscopic_diagnosis=r.get("diagnosis") or None,
+                major_stigmata=r.get("stigmata") or None,
             )
         else:
             result = triage_gi_bleed(
@@ -738,9 +738,9 @@ def _run_batch(input_csv: str, output_csv: str, score_type: str) -> None:
                 mental_status_altered=_bool_str(r.get("mental_status_altered")),
                 mental_status_confirmed=_bool_str(r.get("mental_status_assessed")),
                 age=_int_or_none(r.get("age")),
-                comorbidity=r.get("comorbidity", "none"),
-                endoscopic_diagnosis=r.get("diagnosis", "none"),
-                major_stigmata=r.get("stigmata", "none"),
+                comorbidity=r.get("comorbidity") or None,
+                endoscopic_diagnosis=r.get("diagnosis") or None,
+                major_stigmata=r.get("stigmata") or None,
             )
 
         row_dict = dict(r)
